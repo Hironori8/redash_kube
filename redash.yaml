@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redash-server
+  namespace: redash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redash-server
+  template:
+    metadata:
+      labels:
+        app: redash-server
+    spec:
+      containers:
+      - name: redash
+        image: redash/redash:10.1.0.b50633
+        command: ["python", "manage.py", "runserver", "--host", "0.0.0.0", "--port", "8080"]
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: redash-config
+        - secretRef:
+            name: redash-secrets
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redash-worker
+  namespace: redash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redash-worker
+  template:
+    metadata:
+      labels:
+        app: redash-worker
+    spec:
+      containers:
+      - name: redash-worker
+        image: redash/redash:10.1.0.b50633
+        command: ["python", "manage.py", "rq", "worker"]
+        envFrom:
+        - configMapRef:
+            name: redash-config
+        - secretRef:
+            name: redash-secrets
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redash-scheduler
+  namespace: redash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redash-scheduler
+  template:
+    metadata:
+      labels:
+        app: redash-scheduler
+    spec:
+      containers:
+      - name: redash-scheduler
+        image: redash/redash:10.1.0.b50633
+        command: ["python", "manage.py", "rq", "scheduler"]
+        envFrom:
+        - configMapRef:
+            name: redash-config
+        - secretRef:
+            name: redash-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redash-server
+  namespace: redash
+spec:
+  selector:
+    app: redash-server
+  ports:
+  - port: 8080
+    targetPort: 8080
+  type: LoadBalancer
